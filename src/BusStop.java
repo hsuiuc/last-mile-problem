@@ -5,22 +5,20 @@ import java.util.List;
 /**
  * Created by haosun on 4/20/18.
  */
-public class BusStop implements Comparable<BusStop> {
+public class BusStop extends Coordinate implements Comparable<BusStop> {
     private final int systemStop;
     private final String direction;
     private List<String> routes = new ArrayList<>();
     private final String publicName;
-    private final double point_x;
-    private final double point_y;
+
 
     public BusStop(int systemStop, String direction, String[] routes,
                    String publicName, double point_x, double point_y) {
+        super(point_x, point_y);
         this.systemStop = systemStop;
         this.direction = direction;
         Collections.addAll(this.routes, routes);
         this.publicName = publicName;
-        this.point_x = point_x;
-        this.point_y = point_y;
     }
 
     public int getSystemStop() {
@@ -39,12 +37,17 @@ public class BusStop implements Comparable<BusStop> {
         return publicName;
     }
 
-    public double getPoint_x() {
-        return point_x;
+    @Override
+    public int hashCode() {
+        return systemStop;
     }
 
-    public double getPoint_y() {
-        return point_y;
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof BusStop))
+            return false;
+        BusStop busStop = (BusStop) obj;
+        return systemStop == busStop.getSystemStop();
     }
 
     @Override

@@ -7,8 +7,10 @@ import java.util.*;
 public class FileParser {
     private final String inputFilePath = "./data/Bus_Stop.txt";
     private final String outputFilePath = "./data/Bus_Stop_Test.txt";
-    private final File input = new File(inputFilePath);
-    private final File output = new File(outputFilePath);
+    private final String inputBusStopFilePath = "./data/Bus_Stop.txt";
+    private final String inputBusLineFilePath = "./data/Bus_Line.txt";
+    private final String inputHotSpotFilePath = "./data/chicago_score.txt";
+    private final String inputParcelFilePath = "./data/residential_point.txt";
 
     public void writeToFile() {
         int counter = 0;
@@ -16,12 +18,13 @@ public class FileParser {
         Scanner sc = null;
         BufferedWriter bw = null;
         try {
+            File input = new File(inputFilePath);
             sc = new Scanner(input);
             bw = new BufferedWriter(new FileWriter(outputFilePath));
 
             while (sc.hasNextLine()) {
                 nextLine = sc.nextLine();
-                counter = counter % 50;
+                counter = counter % 20;
                 if (counter++ == 0) {
                     bw.write(nextLine);
                     bw.newLine();
@@ -45,7 +48,6 @@ public class FileParser {
     }
 
     public Map<String, BusLine> getBusLinesFromFile() {
-        String inputBusLineFilePath = "./data/Bus_Line.txt";
         File inputBusLineFile = new File(inputBusLineFilePath);
         Map<String, BusLine> result = new HashMap<>();
         Scanner sc = null;
@@ -68,7 +70,6 @@ public class FileParser {
     }
 
     public List<BusStop> getBusStopsFromFile(Map<String, BusLine> busLineMap) {
-        String inputBusStopFilePath = "./data/Bus_Stop_Test.txt";
         File inputBusStopFile = new File(inputBusStopFilePath);
         Scanner sc = null;
         List<BusStop> result = new LinkedList<>();
@@ -84,7 +85,7 @@ public class FileParser {
                 double point_x = Double.parseDouble(tokens[length - 2]);
                 double point_y = Double.parseDouble(tokens[length - 1]);
                 int from = 2;
-                int to = length - 4;
+                int to = length - 3;
                 String[] routes = Arrays.copyOfRange(tokens, from ,to);
                 BusStop busStop = new BusStop(systemStop, direction, routes, publicName, point_x, point_y);
                 result.add(busStop);
@@ -98,28 +99,70 @@ public class FileParser {
             }
         } catch (FileNotFoundException e) {
             e.printStackTrace();
+        } finally {
+            if (sc != null) {
+                sc.close();
+            }
         }
         result.sort((o1, o2) -> o1.getPoint_x() == o2.getPoint_x() ? 0 :
                 o1.getPoint_x() < o2.getPoint_x() ? -1 : 1);
         return result;
     }
 
-    public static void main(String[] args) {
-        FileParser fileParser = new FileParser();
-//        fileParser.writeToFile();
-//        String string = "7256.000000000000000,EB,\"26,30\",91st Street & Brandon,-87.546989280000005,41.730031799999999";
-//        String[] tokens = string.replaceAll("\"", "").split(",");
-//        Double d = Double.parseDouble(tokens[0]);
-//        System.out.println(d.intValue());
-//        for (String token : tokens) {
-//            System.out.println(token);
-//        }
-        Map<String, BusLine> busLineMap = fileParser.getBusLinesFromFile();
-        List<BusStop> busStopList = fileParser.getBusStopsFromFile(busLineMap);
-        for (BusLine busLine : busLineMap.values()) {
-            if (busLine.getStops().size() != 0) {
-                System.out.println(busLine);
+    public List<HotSpot> getHotSpotsFromFile() {
+        File inputHotSpotFile = new File(inputHotSpotFilePath);
+        Scanner sc = null;
+        List<HotSpot> result = new LinkedList<>();
+        try {
+            sc = new Scanner(inputHotSpotFile);
+            while (sc.hasNextLine()) {
+                String line = sc.nextLine();
+                String[] tokens = line.split("\t");
+                int ID = Integer.parseInt(tokens[0]);
+                double point_x = Double.parseDouble(tokens[2]);
+                double point_y = Double.parseDouble(tokens[1]);
+                double score = Double.parseDouble(tokens[3]);
+                HotSpot hotSpot = new HotSpot(ID, point_x, point_y, score);
+                result.add(hotSpot);
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } finally {
+            if (sc != null) {
+                sc.close();
             }
         }
+        result.sort((o1, o2) -> o1.getPoint_x() == o2.getPoint_x() ? 0 :
+                o1.getPoint_x() < o2.getPoint_x() ? -1 : 1);
+        return result;
+    }
+
+    public List<Coordinate> getParcelFromFile() {
+        File inputParcelFile = new File(inputParcelFilePath);
+        Scanner sc = null;
+        List<Coordinate> result = new LinkedList<>();
+        try {
+            sc = new Scanner(inputParcelFile);
+            while (sc.hasNextLine()) {
+                String line = sc.nextLine();
+                String[] tokens = line.split(",");
+                double point_x = Double.parseDouble(tokens[tokens.length - 2]);
+                double point_y = Double.parseDouble(tokens[tokens.length - 1]);
+                Coordinate coordinate = new Coordinate(point_x, point_y);
+                result.add(coordinate);
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } finally {
+            if (sc != null) {
+                sc.close();
+            }
+        }
+        return result;
+    }
+
+    public static void main(String[] args) {
+        FileParser fileParser = new FileParser();
+        fileParser.writeToFile();
     }
 }
