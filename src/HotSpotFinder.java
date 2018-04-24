@@ -1,30 +1,58 @@
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 
 /**
  * Created by haosun on 4/21/18.
  */
 public class HotSpotFinder {
-    private static final double walkingDistanceIn10Min = 0.1d;
-    private static final double drivingDistanceIn60Min = 30d;
-    private static final int reachableBusStops = 10;
+    private static final double walkingDistanceIn10Min = 0.6;
+    private static final double drivingDistanceIn60Min = 7.5;
+    private static final int reachableBusStops = 6;
+    private static final String outputFilePath = "./data/debug_1.csv";
 
+    /**
+     * compute distance between two places, assum these two places are near,
+     * consider the earth as a flat plane
+     * (-87.3526, 41.4637, -87.3749, 41.9857)
+     * @param lat1 latitude of the first place
+     * @param lon1 longitude of the first place
+     * @param lat2 latitude of the second place
+     * @param lon2 longitude of the second place
+     * @return distance in miles
+     */
     private static double getDistanceFromLatLonInKm(double lat1, double lon1,
                                                     double lat2, double lon2) {
-        double R = 6371d; // Radius of the earth in km
-        double dLat = deg2rad(lat2-lat1);  // deg2rad below
-        double dLon = deg2rad(lon2-lon1);
-        double a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return c * R;
+
+        double a = (lat1-lat2) * distPerLat((lat1 + lat2) / 2);
+        double b = (lon1-lon2)* distPerLng((lon1 + lon2) / 2);
+        return Math.sqrt(a*a+b*b) / 1609;
 
     }
 
-    private static double deg2rad(double deg) {
-        return deg * Math.PI / 180d;
+    private static double distPerLng(double lon){
+        return 0.0003121092*Math.pow(lon, 4)
+                +0.0101182384*Math.pow(lon, 3)
+                -17.2385140059*lon*lon
+                +5.5485277537*lon+111301.967182595;
     }
 
+    private static double distPerLat(double lat){
+        return -0.000000487305676*Math.pow(lat, 4)
+                -0.0033668574*Math.pow(lat, 3)
+                +0.4601181791*lat*lat
+                -1.4558127346*lat+110579.25662316;
+    }
+
+    /**
+     * get all the coordinates within a distance range from a point
+     * @param coordinates all the coordinates, sorted by latitudes
+     * @param lat the latitude of the point
+     * @param lon the longitude of the point
+     * @param range the range in miles
+     * @return all the coordinates
+     */
     private static List<? extends Coordinate> getCoordinatesWithinRange(List<? extends Coordinate> coordinates,
                                                                         double lat, double lon, double range) {
         List<Double> latList = new ArrayList<>();
@@ -33,61 +61,38 @@ public class HotSpotFinder {
         }
         int index = Collections.binarySearch(latList, lat);
         if (index < 0) index = ~index;
-        int upperBound = index - 1;
-        while (upperBound >= 1 && getDistanceFromLatLonInKm(coordinates.get(upperBound).getPoint_x(),
-                lon, lat, lon) < range) {
-            upperBound--;
+
+        int upperBound = 0;
+        int lo = 0, hi = index - 1;
+        while (lo <= hi) {
+            upperBound = lo + (hi - lo) / 2;
+            double dis = getDistanceFromLatLonInKm(coordinates.get(upperBound).getPoint_x(), lon, lat, lon);
+            if (dis <= range) {
+                hi = upperBound - 1;
+            } else {
+                lo = upperBound + 1;
+            }
         }
 
-        int lowerBound = index;
-        while (lowerBound < coordinates.size() - 1 && getDistanceFromLatLonInKm(coordinates.get(lowerBound).getPoint_x(),
-                lon, lat, lon) < range) {
-            lowerBound++;
+        int lowerBound = coordinates.size() - 1;
+        lo = index; hi = coordinates.size() - 1;
+        while (lo <= hi) {
+            lowerBound = lo + (hi - lo) / 2;
+            double dis = getDistanceFromLatLonInKm(coordinates.get(lowerBound).getPoint_x(), lon, lat, lon);
+            if (dis <= range) {
+                lo = lowerBound + 1;
+            } else {
+                hi = lowerBound - 1;
+            }
         }
 
-//        System.out.println("upper" + upperBound);
-//        System.out.println("lower" + lowerBound);
         List<Coordinate> result = new LinkedList<>();
-        for (int i = upperBound; i <= lowerBound; i++) {
+        for (int i = Math.max(0, upperBound); i <= Math.min(coordinates.size() - 1, lowerBound); i++) {
             double busStopLat = coordinates.get(i).getPoint_x();
             double busStopLon = coordinates.get(i).getPoint_y();
             double distance = getDistanceFromLatLonInKm(busStopLat, busStopLon, lat, lon);
             if (distance < range) {
-//                System.out.println("distance" + distance);
-//                System.out.println("range" + range);
                 result.add(coordinates.get(i));
-            }
-        }
-        return result;
-    }
-
-    private static List<BusStop> getStartingBusStops(List<BusStop> busStopList, double lat, double lon) {
-        List<Double> latList = new ArrayList<>();
-        for (BusStop busStop : busStopList) {
-            latList.add(busStop.getPoint_x());
-        }
-        int index = Collections.binarySearch(latList, lat);
-        if (index < 0) index = ~index;
-        int upperBound = index - 1;
-        while (upperBound >= 1 && getDistanceFromLatLonInKm(busStopList.get(upperBound).getPoint_x(),
-                lon, lat, lon) < walkingDistanceIn10Min) {
-            upperBound--;
-        }
-
-        int lowerBound = index;
-        while (lowerBound < busStopList.size() - 1 && getDistanceFromLatLonInKm(busStopList.get(lowerBound).getPoint_x(),
-                lon, lat, lon) < walkingDistanceIn10Min) {
-            lowerBound++;
-        }
-
-//        System.out.println("upper" + upperBound);
-//        System.out.println("lower" + lowerBound);
-        List<BusStop> result = new LinkedList<>();
-        for (int i = upperBound; i <= lowerBound; i++) {
-            double busStopLat = busStopList.get(i).getPoint_x();
-            double busStopLon = busStopList.get(i).getPoint_y();
-            if (getDistanceFromLatLonInKm(busStopLat, busStopLon, lat, lon) < walkingDistanceIn10Min) {
-                result.add(busStopList.get(i));
             }
         }
         return result;
@@ -101,15 +106,13 @@ public class HotSpotFinder {
                     BusLine busLine = busLineMap.get(route);
                     List<BusStop> busStops = busLine.getStops();
                     int index = Collections.binarySearch(busStops, start);
-//                    System.out.println("index" + index);
+
                     for (int i = 0; i < reachableBusStops; i++) {
                         if (index - i >= 0)
                             result.add(busStops.get(index - i));
                         if (index + i < busStops.size())
                             result.add(busStops.get(index + i));
                     }
-                } else {
-                    System.out.println("no route" + route);
                 }
             }
         }
@@ -126,64 +129,50 @@ public class HotSpotFinder {
         return result;
     }
 
-    public static void main(String[] args) {
-//        double lat1 = -87.626114299999998, lon1 = 41.801872260000003;
-//        double lat2 = -87.626114299999998, lon2 = 41.801872260000003;
-//        double distance = HotSpotFinder.getDistanceFromLatLonInKm(lat2, lon2, lat1, lon1);
-//        System.out.println(distance);
-        double startLat = -87.643604, startLon = 41.883919;
+    public static void main(String[] args) throws IOException {
+        System.out.println(new Date());
         FileParser fileParser = new FileParser();
+        BufferedWriter bw = new BufferedWriter(new FileWriter(outputFilePath));
+
         Map<String, BusLine> busLineMap = fileParser.getBusLinesFromFile();
 
         List<BusStop> busStopList = fileParser.getBusStopsFromFile(busLineMap);
-//        Iterator<BusLine> iterator = busLineMap.values().iterator();
-//        for (int i = 0; i < 20; i++) {
-//            if (iterator.hasNext())
-//                System.out.println(iterator.next());
-//        }
-        //System.out.println("bus stop : " + busStopList.size());
-//        for (int i = 0; i < 100; i++) {
-//            System.out.println(busStopList.get(i));
-//        }
 
         List<HotSpot> hotSpotList = fileParser.getHotSpotsFromFile();
-        //System.out.println("hot spot : " + hotSpotList.size());
 
         List<Coordinate> parcelList = fileParser.getParcelFromFile();
 
+        StringBuilder sb = new StringBuilder(1000);
+
+
+        int counter = 0;
+        int size = parcelList.size();
+        int batch = size / 100;
         for (Coordinate parcel : parcelList) {
+            if (counter++ % batch == 0) {
+                System.out.println(counter  / batch);
+            }
+
+            sb.setLength(0);
             List<BusStop> startingBusStops = (List<BusStop>) HotSpotFinder.getCoordinatesWithinRange(busStopList, parcel.getPoint_x(),
                     parcel.getPoint_y(), walkingDistanceIn10Min);
-            System.out.println("start bus stop : " + startingBusStops.size());
 
             Set<BusStop> reachableBusStops = HotSpotFinder.getReachableBusStops(busLineMap, startingBusStops);
-            System.out.println("reachable bus stop : " + reachableBusStops.size());
 
             List<HotSpot> hotSpotsInDrivingDistance = (List<HotSpot>) HotSpotFinder.getCoordinatesWithinRange(hotSpotList, parcel.getPoint_x(),
                     parcel.getPoint_y(), drivingDistanceIn60Min);
-            System.out.println("hot spot in driving distance : " + hotSpotsInDrivingDistance.size());
 
             Set<HotSpot> reachableHotSpots = HotSpotFinder.getReachableHotSpots(hotSpotList, reachableBusStops);
-            System.out.println("reachable hot spot : " + reachableHotSpots.size());
 
-            double reachableIndex = (double) (reachableHotSpots.size()) / (double) (hotSpotsInDrivingDistance.size());
-            System.out.println(reachableIndex);
+            double reachableIndex = (double) (reachableHotSpots.size()) / (double) (hotSpotsInDrivingDistance.size()) * 100;
+
+            sb.append(parcel).append(',').append(reachableIndex).append('\n');
+            bw.write(sb.toString());
+
         }
 
-//        double dis = 0;
-//        double[] array = new double[10];
-//        for (HotSpot aHotSpotList : hotSpotList) {
-//            dis = getDistanceFromLatLonInKm(aHotSpotList.getPoint_x(), aHotSpotList.getPoint_y(), startLat, startLon);
-//            if (dis < 10) {
-//                array[(int) dis]++;
-//            }
-//            if (dis < 1) {
-//                System.out.println(aHotSpotList.getPoint_x());
-//                System.out.println(aHotSpotList.getPoint_y());
-//            }
-//        }
-//        for (double d : array)
-//            System.out.println(d);
+        bw.close();
 
+        System.out.println(new Date());
     }
 }

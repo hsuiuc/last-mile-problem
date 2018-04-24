@@ -11,7 +11,6 @@ public class BusStop extends Coordinate implements Comparable<BusStop> {
     private List<String> routes = new ArrayList<>();
     private final String publicName;
 
-
     public BusStop(int systemStop, String direction, String[] routes,
                    String publicName, double point_x, double point_y) {
         super(point_x, point_y);

@@ -18,4 +18,8 @@ public class Coordinate {
         return point_y;
     }
 
+    @Override
+    public String toString() {
+        return point_x + "," + point_y;
+    }
 }
